@@ -125,3 +125,5 @@ for monads, only it returns a monad, instead of a `Promise`.
 - **How do I simply retrieve the internal value of a monad, without `.map`?**
 - The same way you do that with a `Promise`, and for the same reason: you don't,
 because it defeats the point.
+- **All this is nice and well, but I'm gonna need some regular JS interop here.**
+- Are promises cool? I hope you think they are. All monads have a `.toPromise()` method. Done.
