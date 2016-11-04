@@ -1,4 +1,5 @@
 const resolves = Symbol('@@monad/resolves');
+const resolvesTo = Symbol('@@monad/resolves-to');
 
 class Monad {
   constructor(value) {
@@ -13,30 +14,73 @@ class Monad {
     return false;
   }
 
+  [resolvesTo]() {
+    return this.__val;
+  }
+
   map(onResolve, onReject) {
     onReject = onReject || Monad.of.bind(Monad);
     const didResolve = this[resolves]();
-    const value = (didResolve ? onResolve : onReject)(this.__val);
-    return value instanceof Monad ? value : Identity.of(value);
+    try {
+      const value = (didResolve ? onResolve : onReject)(this[resolvesTo]());
+      return value instanceof Monad ? value : Identity.of(value);
+    } catch (e) {
+      return Either.left(e);
+    }
   }
 
-  asPromise() {
+  toString() {
+    return `<${this.$$name}(${this[resolvesTo]()})>`;
+  }
+
+  toPromise() {
     return new Promise((resolve, reject) => this.map(resolve, reject));
   }
 }
 
 Monad.resolves = resolves;
+Monad.resolvesTo = resolvesTo;
+Monad.prototype.$$name = 'Negation';
 
-const monad = resolver => class extends Monad {
-  [Monad.resolves]() {
-    return resolver(this.__val);
-  }
+const monad = (resolver, name) => {
+  const cls = class extends Monad {
+    [Monad.resolves]() {
+      return resolver(this.__val);
+    }
+  };
+  cls.prototype.$$name = name;
+  return cls;
 };
 
-const Identity = monad(() => true);
-const Maybe = monad(value => value !== null && value !== undefined);
-const Either = monad(value => !(value instanceof Error));
-const Async = class extends monad(value => value instanceof Promise) {
+const Identity = monad(() => true, 'Identity');
+const Maybe = class extends monad(value =>
+  value !== null && value !== undefined, 'Maybe') {
+  [resolvesTo]() {
+    if (this.__val === undefined) return null;
+    return this.__val;
+  }
+};
+const EMPTY = Symbol('empty');
+const Either = class extends monad(({ left, right }) =>
+  left === EMPTY, 'Either') {
+  static of(left, right) {
+    return Reflect.construct(this, [{ left, right }]);
+  }
+
+  static left(value) {
+    return this.of(value);
+  }
+
+  static right(value) {
+    return this.of(EMPTY, value);
+  }
+
+  [resolvesTo]() {
+    if (this.__val.left !== EMPTY) return this.__val.left;
+    return this.__val.right;
+  }
+};
+const Async = class extends monad(value => value instanceof Promise, 'Async') {
   map(onResolve, onReject) {
     const didResolve = this[resolves]();
     if (!didResolve) return Async.of(Promise.reject(this.__val)).map(onResolve, onReject);
@@ -50,6 +94,31 @@ const Async = class extends monad(value => value instanceof Promise) {
   }
 };
 
+const do_ = gen => {
+  const it = gen();
+  let ret;
+  const iterate = run => {
+    try {
+      ret = run && ('e' in run) ? it.throw(run.e) : it.next(run && run.v);
+    } catch (e) {
+      return Either.left(e);
+    }
+
+    if (!ret.done) {
+      if (ret.value instanceof Monad) {
+        return ret.value.map(v => iterate({ v }),
+                             e => iterate({ e }));
+      } else {
+        return Either.left(new Error('Do not yield non-monads'));
+      }
+    }
+
+    return ret.value instanceof Monad ? ret.value : Identity.of(ret.value);
+  };
+
+  return iterate();
+};
+
 module.exports = {
   Monad,
   Identity,
@@ -57,4 +126,5 @@ module.exports = {
   Either,
   Async,
   monad,
+  do_,
 };

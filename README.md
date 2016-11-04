@@ -1,2 +1,2 @@
-# graph-core
-Simplistic, yet robust, graph lib for nodeJs
+# mnd - JS monads for the masses
+Bare-bones JS monads

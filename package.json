@@ -1,20 +1,29 @@
 {
-  "name": "monads",
-  "version": "1.0.0",
-  "description": "",
+  "name": "mnd",
+  "version": "0.1.0",
+  "description": "Bare-bones JS monads",
   "main": "index.js",
   "scripts": {
     "test": "nyc ava -v",
     "html": "nyc --reporter=html ava"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "intention": "^1.0.0"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oakfang/mnd.git"
   },
+  "keywords": [
+    "monads",
+    "functional",
+    "pure"
+  ],
+  "author": "Alon Niv",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/oakfang/mnd/issues"
+  },
+  "homepage": "https://github.com/oakfang/mnd#readme",
   "devDependencies": {
     "ava": "^0.16.0",
-    "nyc": "^8.3.0"
+    "nyc": "^8.4.0"
   }
 }
