@@ -29,6 +29,12 @@ class Monad {
     }
   }
 
+  pass(onDone) {
+    const onResolve = value => onDone(value, true);
+    const onReject = value => onDone(value, false);
+    return this.map(onResolve, onReject);
+  }
+
   toString() {
     return `<${this.$$name}(${this[resolvesTo]()})>`;
   }
@@ -65,6 +71,14 @@ const Either = class extends monad(({ left, right }) =>
   left === EMPTY, 'Either') {
   static of(left, right) {
     return Reflect.construct(this, [{ left, right }]);
+  }
+
+  static wrap(func) {
+    try {
+      return this.right(func());
+    } catch (e) {
+      return this.left(e);
+    }
   }
 
   static left(value) {

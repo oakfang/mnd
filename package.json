@@ -1,6 +1,6 @@
 {
   "name": "mnd",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Bare-bones JS monads",
   "main": "index.js",
   "scripts": {

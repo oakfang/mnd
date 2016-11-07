@@ -84,6 +84,21 @@ which returns one of three objects:
 - If whichever callback being called `throws`, the thrown object (`t`) is
 returned as an `Either.left(t)` (see below).
 
+Another monad method is `.pass`, which acts like `.map`, with one difference:
+instead of accepting two callbacks, it accepts one callback, which it calls
+regardless of the monad's resolution. The callback is called with the monad's
+inner value, and its resolution state.
+For example:
+
+```js
+const withDefault = defaultValue => (value, isResolved) =>
+  isResolved ? value : defaultValue;
+
+const o = { name: 'foo'};
+
+Maybe.of(o.age).pass(withDefault(5)).map(console.log); // prints 5
+```
+
 ## What's inside?
 ```js
 import { Monad, Identity, Maybe, Either, Async, monad, do_ } from 'mnd';
@@ -105,6 +120,7 @@ import { Monad, Identity, Maybe, Either, Async, monad, do_ } from 'mnd';
 ### `Either` - either this worked, or it didn't
 - **Create with intent to resolve:** `x => Either.right(x)`
 - **Create with intent to reject:** `x => Either.left(x)`
+- **Wrap a block with the Either monad:** `Either.wrap(() => /* unsafe code */).map(...)`
 
 ### `Async` - `Promise` to `mnd`
 Wrapping a `Promise` (a native one!) with `Async.of` returns a monad

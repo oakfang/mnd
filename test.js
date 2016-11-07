@@ -25,6 +25,16 @@ test('Either basics', async t => {
   const e = new Error();
   try {
     await Either.left(e).toPromise();
+    t.fail('Should have failed');
+  } catch (v) {
+    t.is(v, e);
+  }
+
+  const wrappedRight = await Either.wrap(() => 5).toPromise();
+  t.is(wrappedRight, 5);
+  try {
+    await Either.wrap(() => { throw e; }).toPromise();
+    t.fail('Should have failed');
   } catch (v) {
     t.is(v, e);
   }
@@ -74,6 +84,39 @@ test('Async monadic chains', async t => {
                            .map(prop('d'))
                            .map(prop('0'), () => 'bar').toPromise();
   t.is(value, 'bar');
+});
+
+test.cb('Monadic passes [reject]', t => {
+  const prop = p => o => Maybe.of(o[p]);
+  const withDefault = dv => (v, resolved) => resolved ? v : dv;
+  Identity.of({
+    a: {
+      b: 'foo',
+    },
+  })
+  .map(prop('a'))
+  .map(prop('b'))
+  .map(prop('c'))
+  .pass(withDefault('bar'))
+  .map(prop('0'))
+  .map(v => t.is(v, 'b'), t.fail)
+  .map(t.end);
+});
+
+test.cb('Monadic passes [resolve]', t => {
+  const prop = p => o => Maybe.of(o[p]);
+  const withDefault = dv => (v, resolved) => resolved ? v : dv;
+  Identity.of({
+    a: {
+      b: 'foo',
+    },
+  })
+  .map(prop('a'))
+  .map(prop('b'))
+  .pass(withDefault('bar'))
+  .map(prop('0'))
+  .map(v => t.is(v, 'f'), t.fail)
+  .map(t.end);
 });
 
 test('do expression [fail]', async t => {
