@@ -102,6 +102,7 @@ Maybe.of(o.age).pass(withDefault(5)).map(console.log); // prints 5
 ## What's inside?
 ```js
 import { Monad, Identity, Maybe, Either, Async, monad, do_ } from 'mnd';
+import mtester from 'mnd/t';
 ```
 
 ### `Monad` - the never monad
@@ -136,6 +137,22 @@ Example: `const Integer = monad(n => n >= 0)`
 ### `do_(generatorFunction)`
 Basically, this is a shortcut. This is like [`co`](https://github.com/tj/co)
 for monads, only it returns a monad, instead of a `Promise`.
+
+## Monadic Tests
+Because of reasons, you're probably going to want to test some of your monads.
+`mnd` comes with a builtin monadic test helper under `mnd/t`.
+
+Usage with `tape`:
+
+```js
+const test = require('tape');
+const mtest = require('mnd/t')(test);
+const { monadicFunction } = require('./app');
+
+// if the monad is rejected, the test autofails
+mtest('Test my monadic function', t =>
+  monadicFunction(5).map(value => t.is(value, 32)));
+```
 
 ## FAQ
 - **How do I simply retrieve the internal value of a monad, without `.map`?**

@@ -2,7 +2,7 @@ import test from 'ava';
 import { Identity, Maybe, Async, Either, do_ } from '.';
 import mtester from './t';
 
-const mtest = mtester(() => test.cb);
+const mtest = mtester(test.cb);
 const get = (o, p) => Maybe.of(o[p]);
 const prop = p => o => Maybe.of(o[p]);
 const withDefault = dv => (v, resolved) => resolved ? v : dv;
