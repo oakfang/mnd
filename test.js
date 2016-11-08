@@ -1,183 +1,135 @@
 import test from 'ava';
 import { Identity, Maybe, Async, Either, do_ } from '.';
+import mtester from './t';
 
-test('Maybe basics', async t => {
+const mtest = mtester(() => test.cb);
+const get = (o, p) => Maybe.of(o[p]);
+const prop = p => o => Maybe.of(o[p]);
+const withDefault = dv => (v, resolved) => resolved ? v : dv;
+
+mtest('Maybe basics [just]', t => {
   const maybe = Maybe.of(1);
   t.is(maybe.toString(), '<Maybe(1)>');
-  const just = await maybe.toPromise();
-  t.is(just, 1);
+  return maybe.map(just => t.is(just, 1));
+});
+
+mtest('Maybe basics [nothing:undefined]', t =>
+  Maybe.of()
+       .map(() => t.fail('Should reject'),
+            n => t.is(n, null)));
+
+mtest('Maybe basics [nothing:null]', t =>
+  Maybe.of(null)
+       .map(() => t.fail('Should reject'),
+            n => t.is(n, null)));
+
+mtest('Either basics [right]', t =>
+  Either.right(1).map(v => t.is(v, 1)));
+
+mtest('Either basics [left]', t =>
+  Either.left(1).map(() => t.fail('should reject'),
+                     v => t.is(v, 1)));
+
+mtest('Either wrap [right]', t => Either.wrap(() => 5).map(v => t.is(v, 5)));
+
+mtest('Either wrap [left]', t => Either.wrap(() => {
+  throw new Error('meow?');
+}).map(() => t.fail('Should have rejected'),
+       e => t.is(e.message, 'meow?')));
+
+mtest('Async basics [resolved]', t =>
+  Async.of(Promise.resolve(1)).map(v => t.is(v, 1)));
+
+mtest('Async basics [rejected]', t =>
+  Async.of(Promise.reject(1)).map(() => t.fail('Should reject'),
+                                  v => t.is(v, 1)));
+
+mtest('Async basics [non-promise]', t =>
+  Async.of(1).map(() => t.fail('Should reject'),
+                  v => t.is(v, 1)));
+
+mtest('Exception safety', t => Identity.of({})
+                                       .map(o => o.x)
+                                       .map(o => o.y)
+                                       .map(o => o.z, () => 'foo')
+                                       .map(v => t.is(v, 'foo')));
+
+mtest('Monadic chains', t => Identity.of({ a: { b: 'foo' } })
+                                     .map(prop('a'))
+                                     .map(prop('b'))
+                                     .map(prop('c'))
+                                     .map(prop('d'))
+                                     .map(prop('0'), () => 'bar')
+                                     .map(v => t.is(v, 'bar')));
+
+mtest('Async Monadic chains', t => Async.of(Promise.resolve({ a: { b: 'foo' } }))
+                                        .map(prop('a'))
+                                        .map(prop('b'))
+                                        .map(prop('c'))
+                                        .map(prop('d'))
+                                        .map(prop('0'), () => 'bar')
+                                        .map(v => t.is(v, 'bar')));
+
+mtest('Monadic passes [reject]', t => Identity.of({
+  a: {
+    b: 'foo',
+  },
+})
+.map(prop('a'))
+.map(prop('b'))
+.map(prop('c'))
+.pass(withDefault('bar'))
+.map(prop('0'))
+.map(v => t.is(v, 'b')));
+
+mtest('Monadic passes [resolve]', t => Identity.of({
+  a: {
+    b: 'foo',
+  },
+})
+.map(prop('a'))
+.map(prop('b'))
+.pass(withDefault('bar'))
+.map(prop('0'))
+.map(v => t.is(v, 'f')));
+
+mtest('do expression [fail]', t => do_(function* () {
+  const o = { a: { b: 'foo' } };
+  const a = yield get(o, 'a');
+  const b = yield get(a, 'b');
+  const c = yield get(b, 'c');
+  return yield get(c, 'd');
+}).map(prop('0'), () => 'bar').map(v => t.is(v, 'bar')));
+
+mtest('do expression [bad]', t => do_(function* () {
+  const o = { a: { b: 'foo' } };
+  const a = yield get(o, 'a');
+  return yield a.b;
+}).map(prop('0'), e => e.message).map(v => t.is(v, 'Do not yield non-monads')));
+
+mtest('do expression [good]', t => do_(function* () {
+  const o = { a: { b: 'foo' } };
+  const a = yield get(o, 'a');
+  return get(a, 'b');
+}).map(prop('0'), e => e.message).map(v => t.is(v, 'f')));
+
+mtest('do expression [good:wrap]', t => do_(function* () {
+  const o = { a: { b: 'foo' } };
+  const a = yield get(o, 'a');
+  return (yield get(a, 'b'))[0];
+}).map(v => t.is(v, 'f')));
+
+mtest('do expression [good:try]', t => do_(function* () {
+  const o = { a: { b: 'foo' } };
+  const a = yield get(o, 'a');
+  const b = yield get(a, 'b');
   try {
-    await Maybe.of(null).toPromise();
-  } catch (v) {
-    t.is(v, null);
-  }
-
-  try {
-    await Maybe.of().toPromise();
-  } catch (v) {
-    t.is(v, null);
-  }
-});
-
-test('Either basics', async t => {
-  const right = await Either.right(1).toPromise();
-  t.is(right, 1);
-  const e = new Error();
-  try {
-    await Either.left(e).toPromise();
-    t.fail('Should have failed');
-  } catch (v) {
-    t.is(v, e);
-  }
-
-  const wrappedRight = await Either.wrap(() => 5).toPromise();
-  t.is(wrappedRight, 5);
-  try {
-    await Either.wrap(() => { throw e; }).toPromise();
-    t.fail('Should have failed');
-  } catch (v) {
-    t.is(v, e);
-  }
-});
-
-test('Async basics', async t => {
-  const success = await Async.of(Promise.resolve(1)).toPromise();
-  t.is(await success, 1);
-  try {
-    await Async.of(Promise.reject(1)).toPromise();
-  } catch (v) {
-    t.is(v, 1);
-  }
-
-  try {
-    await Async.of(1).toPromise();
-  } catch (v) {
-    t.is(v, 1);
-  }
-});
-
-test('Exception safety', async t => {
-  const value = await Identity.of({})
-                              .map(o => o.x)
-                              .map(o => o.y)
-                              .map(o => o.z, () => 'foo').toPromise();
-  t.is(value, 'foo');
-});
-
-test('Monadic chains', async t => {
-  const prop = p => o => Maybe.of(o[p]);
-  const value = await Identity.of({ a: { b: 'foo' } })
-                              .map(prop('a'))
-                              .map(prop('b'))
-                              .map(prop('c'))
-                              .map(prop('d'))
-                              .map(prop('0'), () => 'bar').toPromise();
-  t.is(value, 'bar');
-});
-
-test('Async monadic chains', async t => {
-  const prop = p => o => Maybe.of(o[p]);
-  const value = await Async.of(Promise.resolve({ a: { b: 'foo' } }))
-                           .map(prop('a'))
-                           .map(prop('b'))
-                           .map(prop('c'))
-                           .map(prop('d'))
-                           .map(prop('0'), () => 'bar').toPromise();
-  t.is(value, 'bar');
-});
-
-test.cb('Monadic passes [reject]', t => {
-  const prop = p => o => Maybe.of(o[p]);
-  const withDefault = dv => (v, resolved) => resolved ? v : dv;
-  Identity.of({
-    a: {
-      b: 'foo',
-    },
-  })
-  .map(prop('a'))
-  .map(prop('b'))
-  .map(prop('c'))
-  .pass(withDefault('bar'))
-  .map(prop('0'))
-  .map(v => t.is(v, 'b'), t.fail)
-  .map(t.end);
-});
-
-test.cb('Monadic passes [resolve]', t => {
-  const prop = p => o => Maybe.of(o[p]);
-  const withDefault = dv => (v, resolved) => resolved ? v : dv;
-  Identity.of({
-    a: {
-      b: 'foo',
-    },
-  })
-  .map(prop('a'))
-  .map(prop('b'))
-  .pass(withDefault('bar'))
-  .map(prop('0'))
-  .map(v => t.is(v, 'f'), t.fail)
-  .map(t.end);
-});
-
-test('do expression [fail]', async t => {
-  const get = (o, p) => Maybe.of(o[p]);
-  const prop = p => o => Maybe.of(o[p]);
-  const value = await do_(function* () {
-    const o = { a: { b: 'foo' } };
-    const a = yield get(o, 'a');
-    const b = yield get(a, 'b');
     const c = yield get(b, 'c');
-    return yield get(c, 'd');
-  }).map(prop('0'), () => 'bar').toPromise();
-  t.is(value, 'bar');
-});
+    const d = yield get(c, 'd');
+    return yield get(d, 'e');
+  } catch (e) {
+    return 'bar';
+  }
+}).map(prop('0'), e => e.message).map(v => t.is(v, 'b')));
 
-test('do expression [bad]', async t => {
-  const get = (o, p) => Maybe.of(o[p]);
-  const prop = p => o => Maybe.of(o[p]);
-  const value = await do_(function* () {
-    const o = { a: { b: 'foo' } };
-    const a = yield get(o, 'a');
-    return yield a.b;
-  }).map(prop('0'), e => e.message).toPromise();
-  t.is(value, 'Do not yield non-monads');
-});
-
-test('do expression [good]', async t => {
-  const get = (o, p) => Maybe.of(o[p]);
-  const prop = p => o => Maybe.of(o[p]);
-  const value = await do_(function* () {
-    const o = { a: { b: 'foo' } };
-    const a = yield get(o, 'a');
-    return get(a, 'b');
-  }).map(prop('0'), e => e.message).toPromise();
-  t.is(value, 'f');
-});
-
-test('do expression [good:wrap]', async t => {
-  const get = (o, p) => Maybe.of(o[p]);
-  const value = await do_(function* () {
-    const o = { a: { b: 'foo' } };
-    const a = yield get(o, 'a');
-    return (yield get(a, 'b'))[0];
-  }).toPromise();
-  t.is(value, 'f');
-});
-
-test('do expression [good:try]', async t => {
-  const get = (o, p) => Maybe.of(o[p]);
-  const prop = p => o => Maybe.of(o[p]);
-  const value = await do_(function* () {
-    const o = { a: { b: 'foo' } };
-    const a = yield get(o, 'a');
-    const b = yield get(a, 'b');
-    try {
-      const c = yield get(b, 'c');
-      const d = yield get(c, 'd');
-      return yield get(d, 'e');
-    } catch (e) {
-      return 'bar';
-    }
-  }).map(prop('0'), e => e.message).toPromise();
-  t.is(value, 'b');
-});
+test('monad.toPromise()', async t => t.is(await Maybe.of(1).toPromise(), 1));
